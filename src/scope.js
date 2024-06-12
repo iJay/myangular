@@ -4,10 +4,13 @@ function Scope () {
   this.$$watchers = []
 }
 
+// 保证初始值的唯一性，以此来保证listener函数在第一次时可以被调用
+function initWatchValue () {}
 Scope.prototype.$watch = function (watchFn, listenerFn) {
   var watcher = {
     watchFn,
-    listenerFn
+    listenerFn,
+    last: initWatchValue
   }
   this.$$watchers.push(watcher);
 }
@@ -20,7 +23,7 @@ Scope.prototype.$digest = function () {
     oldValue = watcher.last;
     if (newValue !== oldValue) {
       watcher.last = newValue;
-      watcher.listenerFn(newValue, oldValue, self);
+      watcher.listenerFn(newValue, (oldValue === initWatchValue ? newValue : oldValue), self);
     }
     
   })

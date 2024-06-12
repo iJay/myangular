@@ -61,5 +61,37 @@ describe('Scope', function () {
       scope.$digest();
       expect(scope.counter).toBe(2);
     })
+
+    // 当被侦听的变量恰好是undefined，第一次运行watch函数，listener函数就不会被调用
+    // 我们希望第一次watch函数执行，listener无论如何都会被调用
+    it('calls listener when watch value is first undefined', function () {
+      scope.counter = 0;
+      scope.$watch(
+        function (scope) {return scope.someValue},
+        function (newValue, oldValue, sope) {
+          scope.counter++;
+        }
+      )
+
+      scope.$digest();
+      expect(scope.counter).toBe(1);
+    });
+
+    // initWatchVal 也会作为 watcher 最初的旧值被传递到 listener 函数中。但我们并不希望这个特殊函数能在 scope.js 以外的地方被访问到。
+    // 要实现这个目的，我们只需要在注册 watcher 后，把新值当作 listener 旧值就可以了
+    it('calls listener with new value as old value the firts time', function () {
+      scope.someValue = 123;
+      var oldValueGiven;
+
+      scope.$watch(
+        function (scope) { return scope.someValue; },
+        function (newValue, oldValue, scope) {
+          oldValueGiven = oldValue;
+        }
+      )
+
+      scope.$digest();
+      expect(oldValueGiven).toBe(123);
+    })
   });
 });
