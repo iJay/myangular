@@ -282,5 +282,31 @@ describe('Scope', function () {
       scope.$digest();
       expect(scope.counter).toBe(1);
     });
+
+    // Angular 实现移除 watcher 的方式十分聪明：Angular 中的 $watch 函数会有一个返回值。
+    // 这个值就是一个函数，当它被调用的时候就会销毁对应的 watcher。
+    it('allows desrtrying a $watch with a removal function', function () {
+      scope.aValue = 'abc';
+      scope.counter = 0;
+
+      var destroyWatch = scope.$watch(
+        function (scope) { return scope.aValue; },
+        function(newValue, oldValue, scope) {
+          scope.counter++;
+        }
+      );
+
+      scope.$digest();
+      expect(scope.counter).toBe(1);
+
+      scope.aValue = 'def';
+      scope.$digest();
+      expect(scope.counter).toBe(2);
+
+      scope.aValue = 'ghi';
+      destroyWatch();
+      scope.$digest();
+      expect(scope.counter).toBe(2);
+    });
   });
 });

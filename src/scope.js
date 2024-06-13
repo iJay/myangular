@@ -8,15 +8,23 @@ function Scope () {
 // 保证初始值的唯一性，以此来保证listener函数在第一次时可以被调用
 function initWatchValue () {}
 Scope.prototype.$watch = function (watchFn, listenerFn, valueEq) {
+  var self = this;
   var watcher = {
     watchFn,
     listenerFn: listenerFn || function () {},
     last: initWatchValue,
     valueEq: !!valueEq
   }
-  this.$$watchers.push(watcher);
+  self.$$watchers.push(watcher);
   // 在注册 watcher 后重置 $$lastDirtyWatch来解决这个问题(在 listener 函数中注册另一个 watcher)，这样就能显式地禁用短路优化
-  this.$$lastDirtyWatch = null;
+  self.$$lastDirtyWatch = null;
+
+  return function () {
+    var index = self.$$watchers.indexOf(watcher);
+    if (index >= 0) {
+      self.$$watchers.splice(index, 1);
+    }
+  }
 
 }
 
