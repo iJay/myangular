@@ -1,4 +1,5 @@
 var Scope = require('../src/scope');
+var _ = require('lodash');
 
 describe('Scope', function () {
   it('can be constructed and used as an object', function () {
@@ -155,5 +156,49 @@ describe('Scope', function () {
 
       expect(function() { scope.$digest(); }).toThrow();
     })
+
+    // Short-Circuiting The Digest When The Last Watch Is Clean
+    it('ends the digest when the last watch is clean', function () {
+      scope.array = _.range(100);
+      var watchExecutions = 0;
+
+      _.times(100, function(i) {
+        scope.$watch(
+          function (scope) {
+            watchExecutions++;
+            return scope.array[i];
+          },
+          function() {}
+        )
+      });
+
+      scope.$digest();
+      expect(watchExecutions).toBe(200);
+
+      scope.array[0] = 420;
+      scope.$digest();
+      expect(watchExecutions).toBe(301);
+    });
+
+    // 一种特殊情况——在 listener 函数中注册另一个 watcher
+    it('does not end digest so that new watchers are not run', function () {
+      scope.aValue = 'abc';
+      scope.counter = 0;
+
+      scope.$watch(
+        function (scope) { return scope.aValue; },
+        function (newValue, oldValue, scope) {
+          scope.$watch(
+            function (scope) { return scope.aValue; },
+            function (newValue, oldValue, scope) {
+              scope.counter++;
+            }
+          )
+        }
+      );
+
+      scope.$digest();
+      expect(scope.counter).toBe(1);
+    });
   });
 });
