@@ -34,9 +34,13 @@ Scope.prototype.$digestOnce = function () {
 // $digest 至少会对所有 watcher 进行一轮遍历
 // 只要发现值发生了变化就一直调用 $$digestOnce
 Scope.prototype.$digest = function () {
+  var ttl = 10;
   var dirty;
   do {
     dirty = this.$digestOnce()
+    if (dirty && !(ttl--)) {
+      throw '10 digest iterations reached'
+    }
   } while (dirty)
 }
 
