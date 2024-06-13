@@ -25,18 +25,22 @@ Scope.prototype.$digestOnce = function () {
   var self = this;
   var newValue, oldValue, dirty;
   _.forEach(this.$$watchers, function(watcher) {
-    newValue = watcher.watchFn(self);
-    oldValue = watcher.last;
-    if (!self.$$areEqual(newValue, oldValue, watcher.valueEq)) {
-      self.$$lastDirtyWatch = watcher
-      watcher.last = (watcher.valueEq ? _.cloneDeep(newValue) : newValue);
-      watcher.listenerFn(newValue, (oldValue === initWatchValue ? newValue : oldValue), self);
-      dirty = true;
-    } else if (self.$$lastDirtyWatch === watcher) {
-      // 在 lodash的 _.forEach 循环中显式地返回 false 会让循环提前结束
-      return false;
+    try { // 在Angular中 它实际上会把异常处理交由一个叫 $exceptionHandler 的服务来处理
+      newValue = watcher.watchFn(self);
+      oldValue = watcher.last;
+      if (!self.$$areEqual(newValue, oldValue, watcher.valueEq)) {
+        self.$$lastDirtyWatch = watcher
+        watcher.last = (watcher.valueEq ? _.cloneDeep(newValue) : newValue);
+        watcher.listenerFn(newValue, (oldValue === initWatchValue ? newValue : oldValue), self);
+        dirty = true;
+      } else if (self.$$lastDirtyWatch === watcher) {
+        // 在 lodash的 _.forEach 循环中显式地返回 false 会让循环提前结束
+        return false;
+      }
+    } catch (e) {
+      console.error(e);
     }
-  })
+  });
   return dirty;
 }
 
