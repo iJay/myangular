@@ -7,11 +7,12 @@ function Scope () {
 
 // 保证初始值的唯一性，以此来保证listener函数在第一次时可以被调用
 function initWatchValue () {}
-Scope.prototype.$watch = function (watchFn, listenerFn) {
+Scope.prototype.$watch = function (watchFn, listenerFn, valueEq) {
   var watcher = {
     watchFn,
     listenerFn: listenerFn || function () {},
-    last: initWatchValue
+    last: initWatchValue,
+    valueEq: !!valueEq
   }
   this.$$watchers.push(watcher);
   // 在注册 watcher 后重置 $$lastDirtyWatch来解决这个问题(在 listener 函数中注册另一个 watcher)，这样就能显式地禁用短路优化
@@ -26,9 +27,9 @@ Scope.prototype.$digestOnce = function () {
   _.forEach(this.$$watchers, function(watcher) {
     newValue = watcher.watchFn(self);
     oldValue = watcher.last;
-    if (newValue !== oldValue) {
-      self.$$lastDirtyWatch = watcher;
-      watcher.last = newValue;
+    if (!self.$$areEqual(newValue, oldValue, watcher.valueEq)) {
+      self.$$lastDirtyWatch = watcher
+      watcher.last = (watcher.valueEq ? _.cloneDeep(newValue) : newValue);
       watcher.listenerFn(newValue, (oldValue === initWatchValue ? newValue : oldValue), self);
       dirty = true;
     } else if (self.$$lastDirtyWatch === watcher) {
@@ -52,6 +53,15 @@ Scope.prototype.$digest = function () {
       throw '10 digest iterations reached'
     }
   } while (dirty)
+}
+
+// 这里借助lodash工具函数实现值的比较
+Scope.prototype.$$areEqual = function (newValue, oldValue, valueEq) {
+  if (valueEq) {
+    return _.isEqual(newValue, oldValue);
+  } else {
+    return newValue === oldValue;
+  }
 }
 
 module.exports = Scope;

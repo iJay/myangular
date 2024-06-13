@@ -200,5 +200,26 @@ describe('Scope', function () {
       scope.$digest();
       expect(scope.counter).toBe(1);
     });
+
+    // 之前比较都是基于引用的比较，对于对象或数组内元素或者属性的改变，无法做出合理判断
+    it('compares based on value if enabled', function () {
+      scope.aProperty = [1, 2, 3]
+      scope.counter = 0;
+
+      scope.$watch(
+        function (scope) {return scope.aProperty; },
+        function (newLvaue, oldValue, scope) {
+          scope.counter++;
+        },
+        true
+      );
+
+      scope.$digest();
+      expect(scope.counter).toBe(1);
+
+      scope.aProperty.push(4);
+      scope.$digest();
+      expect(scope.counter).toBe(2);
+    })
   });
 });
