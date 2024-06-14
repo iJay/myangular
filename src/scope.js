@@ -15,7 +15,8 @@ Scope.prototype.$watch = function (watchFn, listenerFn, valueEq) {
     last: initWatchValue,
     valueEq: !!valueEq
   }
-  self.$$watchers.push(watcher);
+  // 在 digest 的过程中有 watcher 被移除时，已经执行的 watcher 就会填满空出来的数组空间，这样不会对剩余的 watcher 产生影响
+  self.$$watchers.unshift(watcher);
   // 在注册 watcher 后重置 $$lastDirtyWatch来解决这个问题(在 listener 函数中注册另一个 watcher)，这样就能显式地禁用短路优化
   self.$$lastDirtyWatch = null;
 
@@ -24,6 +25,8 @@ Scope.prototype.$watch = function (watchFn, listenerFn, valueEq) {
     if (index >= 0) {
       self.$$watchers.splice(index, 1);
     }
+    // 在移除 watcher 的同时取消短路优化
+    self.$$lastDirtyWatch = null;
   }
 
 }
@@ -32,18 +35,22 @@ Scope.prototype.$watch = function (watchFn, listenerFn, valueEq) {
 Scope.prototype.$digestOnce = function () {
   var self = this;
   var newValue, oldValue, dirty;
-  _.forEach(this.$$watchers, function(watcher) {
+  // 从后往前遍历 防止watchFn中删除当前watcher 导致跳过未遍历的watcher
+  // 这里如果是从前往后遍历，删除其中一个watcher 数组自动进行shift操作，后面的watcher会替代被删除watcher的位置
+  _.forEachRight(this.$$watchers, function(watcher) {
     try { // 在Angular中 它实际上会把异常处理交由一个叫 $exceptionHandler 的服务来处理
-      newValue = watcher.watchFn(self);
-      oldValue = watcher.last;
-      if (!self.$$areEqual(newValue, oldValue, watcher.valueEq)) {
-        self.$$lastDirtyWatch = watcher
-        watcher.last = (watcher.valueEq ? _.cloneDeep(newValue) : newValue);
-        watcher.listenerFn(newValue, (oldValue === initWatchValue ? newValue : oldValue), self);
-        dirty = true;
-      } else if (self.$$lastDirtyWatch === watcher) {
-        // 在 lodash的 _.forEach 循环中显式地返回 false 会让循环提前结束
-        return false;
+      if (watcher) {
+        newValue = watcher.watchFn(self);
+        oldValue = watcher.last;
+        if (!self.$$areEqual(newValue, oldValue, watcher.valueEq)) {
+          self.$$lastDirtyWatch = watcher
+          watcher.last = (watcher.valueEq ? _.cloneDeep(newValue) : newValue);
+          watcher.listenerFn(newValue, (oldValue === initWatchValue ? newValue : oldValue), self);
+          dirty = true;
+        } else if (self.$$lastDirtyWatch === watcher) {
+          // 在 lodash的 _.forEach 循环中显式地返回 false 会让循环提前结束
+          return false;
+        }
       }
     } catch (e) {
       console.error(e);
