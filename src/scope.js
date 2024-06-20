@@ -85,4 +85,11 @@ Scope.prototype.$$areEqual = function (newValue, oldValue, valueEq) {
   }
 }
 
+// 为什么调用函数还要这样绕圈子呢? $eval 真正有趣的地方要到后面介绍表达式时才能展现出来
+// 们用原生函数形式的 $eval 还看不出来。到那时，$eval 跟 $watch 一样，可以直接传入一个字符串表达式，
+// $eval 会对这个表达式进行编译，然后再在给定的作用域语境中执行它
+Scope.prototype.$eval = function (expr, locals) {
+  return expr(this, locals);
+}
+
 module.exports = Scope;
