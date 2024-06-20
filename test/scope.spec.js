@@ -476,4 +476,59 @@ describe("$evalAsync", function () {
     expect(scope.asyncEvaluatedImmediately).toBe(false);
 
   });
+
+  it("executes $evalAsynced functions even when not dirty", function () {
+    scope.aValue = [1, 2, 3]
+    scope.asyncEvaluated = false;
+
+    scope.$watch(
+      function (scope) {
+        if (!scope.asyncEvaluated) {
+          // 不推荐这样做，因为我们认为 watch 函数不应该产生任何的副作用。
+          // 但在 Angular 中这种做法也是被允许的，所以我们要保证这种操作下不会对 digset 产生不良的影响。
+          scope.$evalAsync(function (scope) {
+            scope.asyncEvaluated = true;
+          })
+        }
+        return scope.aValue;
+      },
+      function () {}
+    );
+
+    scope.$digest();
+
+    expect(scope.asyncEvaluated).toBe(true);
+  });
+
+  it("executes $evalAsync functions even then not dirty", function() {
+    scope.aValue = [1, 2, 3];
+    scope.asyncEvaluatedTimes = 0;
+
+    scope.$watch(
+      function (scope) {
+        if (scope.asyncEvaluatedTimes < 2) {
+          scope.$evalAsync(function (scope) {
+            scope.asyncEvaluatedTimes++;
+          });
+        }
+        return scope.aValue;
+      },
+      function () {}
+    );
+    scope.$digest();
+
+    expect(scope.asyncEvaluatedTimes).toBe(2);
+  });
+
+  it("eventually halts $evalAsyncs added by watches", function () {
+    scope.aValue = [1, 2, 3];
+    scope.$watch(
+      function (scope) {
+        scope.$evalAsync(function (scope) {});
+        return scope.aValue;
+      }
+    );
+
+    expect(function () {scope.$digest();}).toThrow();
+  });
 });

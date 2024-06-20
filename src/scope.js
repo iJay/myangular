@@ -73,10 +73,12 @@ Scope.prototype.$digest = function () {
       asyncTask.scope.$eval(asyncTask.expression);
     }
     dirty = this.$digestOnce()
-    if (dirty && !(ttl--)) {
+    // 保证无论是因为 watch 函数 变“脏”，还是因为异步任务队列还有任务存在，
+    // 我们都能确保 digest 周期会在达到迭代上限时被终止。
+    if ((dirty || this.$$asyncQueue.length) && !(ttl--)) {
       throw '10 digest iterations reached'
     }
-  } while (dirty)
+  } while (dirty || this.$$asyncQueue.length)
 }
 
 // 这里借助lodash工具函数实现值的比较
@@ -85,7 +87,10 @@ Scope.prototype.$$areEqual = function (newValue, oldValue, valueEq) {
     return _.isEqual(newValue, oldValue);
   } else {
     return newValue === oldValue || ( // 对NaN的比较做特殊处理
-      typeof newValue === 'number' && typeof oldValue === 'number' && isNaN(newValue) && isNaN(oldValue)
+      typeof newValue === 'number' && 
+      typeof oldValue === 'number' && 
+      isNaN(newValue) && 
+      isNaN(oldValue)
     );
   }
 }
