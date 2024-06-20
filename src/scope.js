@@ -92,4 +92,14 @@ Scope.prototype.$eval = function (expr, locals) {
   return expr(this, locals);
 }
 
+Scope.prototype.$apply = function (func) {
+  // 在 `finally` 代码块中调用 `$digest`，这样才能保证即使执行函数时发生了异常，依然会启动 digest 周期。
+  try {
+    this.$eval(func);
+  } finally {
+    this.$digest();
+  }
+  
+}
+
 module.exports = Scope;
