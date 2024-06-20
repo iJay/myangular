@@ -1,8 +1,9 @@
 var _ = require('lodash')
 function Scope () {
   // 前缀——$$表示这个变量仅用于 Angular 框架内部，不允许在应用代码中进行访问。
-  this.$$watchers = []
+  this.$$watchers = [];
   this.$$lastDirtyWatch = null;
+  this.$$asyncQueue = [];
 }
 
 // 保证初始值的唯一性，以此来保证listener函数在第一次时可以被调用
@@ -67,6 +68,10 @@ Scope.prototype.$digest = function () {
   // 只要 digest 启动，就把这个实例属性$$lastDirtyWatc重置为null
   this.$$lastDirtyWatch = null;
   do {
+    while(this.$$asyncQueue.length) {
+      var asyncTask = this.$$asyncQueue.shift();
+      asyncTask.scope.$eval(asyncTask.expression);
+    }
     dirty = this.$digestOnce()
     if (dirty && !(ttl--)) {
       throw '10 digest iterations reached'
@@ -99,7 +104,14 @@ Scope.prototype.$apply = function (func) {
   } finally {
     this.$digest();
   }
-  
+}
+
+Scope.prototype.$evalAsync = function (expr) {
+  // 这里把当前作用域也保存到任务队列是有原因的
+  this.$$asyncQueue.push({
+    scope: this,
+    expression: expr
+  })
 }
 
 module.exports = Scope;
