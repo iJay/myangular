@@ -719,4 +719,66 @@ describe("$postDigest", function () {
     scope.$digest();
     expect(scope.watchedValue).toBe('changed value');
   });
+
+  it("catches exceptions in $evalAsync", function (done) {
+    scope.aValue = 'abc';
+    scope.counter = 0;
+
+    scope.$watch(
+      function (scope) {
+        return scope.aValue;
+      },
+      function (newValue, oldValue, scope) {
+        scope.counter++;
+      }
+    );
+
+    scope.$evalAsync(function (scope) {
+      throw 'Error';
+    });
+
+    setTimeout(function () {
+      expect(scope.counter).toBe(1);
+      done();
+    }, 50);
+  });
+
+  it("catches exceptions in $applyAsync", function (done) {
+    /**
+     * 这里我们连续用了两个会抛出异常的函数，如果我们只用一个的话，
+     * 第二个函数本来就一定会被执行。`$apply` 函数中的 `finally` 代码块中会触发 `$digest`，
+     * 在这个 `$digest` 中，`$applyAsync` 创建的异步任务队列都会被执行完毕。
+     */
+    scope.$applyAsync(function () {
+      throw 'Error'
+    });
+
+    scope.$applyAsync(function () {
+      throw 'Error'
+    });
+
+    scope.$applyAsync(function () {
+      scope.applied = true;
+    });
+
+    setTimeout(function () {
+      expect(scope.applied).toBe(true);
+      done();
+    }, 50)
+  });
+
+  it("catches exceptions in $$postDigest", function () {
+    var didRun = false;
+
+    scope.$$postDigest(function () {
+      throw 'Error';
+    });
+
+    scope.$$postDigest(function () {
+      didRun = true;
+    });
+
+    scope.$digest();
+    expect(didRun).toBe(true);
+  });
 });

@@ -81,8 +81,12 @@ Scope.prototype.$digest = function () {
   }
   do {
     while(this.$$asyncQueue.length) {
+     try {
       var asyncTask = this.$$asyncQueue.shift();
       asyncTask.scope.$eval(asyncTask.expression);
+     } catch (error) {
+      console.error(error);
+     }
     }
     dirty = this.$digestOnce()
     // 保证无论是因为 watch 函数 变“脏”，还是因为异步任务队列还有任务存在，
@@ -93,7 +97,11 @@ Scope.prototype.$digest = function () {
     }
   } while (dirty || this.$$asyncQueue.length)
   while(this.$$postDigestQueue.length) {
-    this.$$postDigestQueue.shift()();
+    try {
+      this.$$postDigestQueue.shift()();
+    } catch (error) {
+      console.error(error);
+    }
   }
   this.$clearPhase()
 }
@@ -150,7 +158,11 @@ Scope.prototype.$applyAsync = function (func) {
 // 把 `$applyAsync` 中用于遍历执行异步任务队列的代码抽取成一个内部函数
 Scope.prototype.$$flushApplyAsync = function () {
   while(this.$$applyAsyncQueue.length) {
-    this.$$applyAsyncQueue.shift()()
+    try {
+      this.$$applyAsyncQueue.shift()()
+    } catch (error) {
+      console.error(error);
+    }
   }
   this.$$applyAsyncId = null;
 }
