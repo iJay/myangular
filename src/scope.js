@@ -34,6 +34,69 @@ Scope.prototype.$watch = function (watchFn, listenerFn, valueEq) {
     // 在移除 watcher 的同时取消短路优化
     self.$$lastDirtyWatch = null;
   }
+}
+
+Scope.prototype.$watchGroup = function (watchFns, listenerFn) {
+  var self = this;
+  var newValues = new Array(watchFns.length);
+  var oldValues = new Array(watchFns.length);
+  var changeReactionScheduled = false;
+  var firstRun = true;
+
+  /**
+   * 如果为空，我们就设定一个调用 listener 函数的延时任务，
+   * 然后下面的代码就没有必要继续执行了，直接退出就可以。
+   */
+  if (watchFns.length === 0) {
+    /**
+     * watch 数组为空的情况，我们需要保证在这种情况下也会生成一个销毁 watcher 的函数。
+     * listener 在这种情况下只会被调用一次，但我们依然可以在第一次 digest 启动之前调用注销函数，
+     * 在这种情况下，即使是一次调用也需要跳过。在代码中加入一个布尔值标识，
+     * 然后在调用 listener 函数之前检查一下这个布尔值标识的值就可以
+     */
+    var shouldCall = true
+    self.$evalAsync(function () {
+      if (shouldCall) {
+        listenerFn(newValues, oldValues, self);
+      }
+    });
+    return function () {
+      shouldCall = false;
+    }
+  }
+
+  function watchGroupListener() {
+    if (firstRun) {
+      firstRun = false
+      listenerFn(newValues, newValues, self);
+    } else {
+      listenerFn(newValues, oldValues, self);
+    }
+    changeReactionScheduled = false;
+  }
+
+  var destroyFunctions = _.map(watchFns, function (watchFn, i) {
+    return self.$watch(watchFn, function (newValue, oldValue) {
+      newValues[i] = newValue;
+        oldValues[i] = oldValue;
+        if (!changeReactionScheduled) {
+          changeReactionScheduled = true;
+          self.$evalAsync(watchGroupListener);
+        }
+    });
+  });
+
+  return function () {
+    _.forEach(destroyFunctions, function(destroyFunction) {
+      destroyFunction();
+    });
+  }
+
+  /**
+   * 由于每个 watcher 调用后本来就会返回用于销毁该 watcher 的函数，
+   * 我们要做的就是将它们收集起来，然后创建一个新的销毁函数，
+   * 这个销毁函数会逐个调用每个 watch 的销毁函数
+   */
 
 }
 
@@ -127,6 +190,22 @@ Scope.prototype.$eval = function (expr, locals) {
   return expr(this, locals);
 }
 
+Scope.prototype.$evalAsync = function (expr) {
+  var self = this;
+  if (!self.$$phase && !self.$$asyncQueue.length) {
+    setTimeout(function () {
+      if (self.$$asyncQueue.length) {
+        self.$digest();
+      }
+    }, 0)
+  }
+  // 这里把当前作用域也保存到任务队列是有原因的
+  this.$$asyncQueue.push({
+    scope: this,
+    expression: expr
+  })
+}
+
 Scope.prototype.$apply = function (func) {
   // 在 `finally` 代码块中调用 `$digest`，这样才能保证即使执行函数时发生了异常，依然会启动 digest 周期。
   try {
@@ -165,22 +244,6 @@ Scope.prototype.$$flushApplyAsync = function () {
     }
   }
   this.$$applyAsyncId = null;
-}
-
-Scope.prototype.$evalAsync = function (expr) {
-  var self = this;
-  if (!self.$$phase && !self.$$asyncQueue.length) {
-    setTimeout(function () {
-      if (self.$$asyncQueue.length) {
-        self.$digest();
-      }
-    }, 0)
-  }
-  // 这里把当前作用域也保存到任务队列是有原因的
-  this.$$asyncQueue.push({
-    scope: this,
-    expression: expr
-  })
 }
 
 Scope.prototype.$beginPhase = function (phase) {
