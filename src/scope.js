@@ -4,10 +4,12 @@ function Scope () {
   this.$$watchers = [];
   this.$$lastDirtyWatch = null;
   this.$$asyncQueue = [];
+  this.$$phase = null;
 }
 
 // 保证初始值的唯一性，以此来保证listener函数在第一次时可以被调用
 function initWatchValue () {}
+
 Scope.prototype.$watch = function (watchFn, listenerFn, valueEq) {
   var self = this;
   var watcher = {
@@ -67,6 +69,7 @@ Scope.prototype.$digest = function () {
   var dirty;
   // 只要 digest 启动，就把这个实例属性$$lastDirtyWatc重置为null
   this.$$lastDirtyWatch = null;
+  this.$beginPhase('$digest');
   do {
     while(this.$$asyncQueue.length) {
       var asyncTask = this.$$asyncQueue.shift();
@@ -76,9 +79,11 @@ Scope.prototype.$digest = function () {
     // 保证无论是因为 watch 函数 变“脏”，还是因为异步任务队列还有任务存在，
     // 我们都能确保 digest 周期会在达到迭代上限时被终止。
     if ((dirty || this.$$asyncQueue.length) && !(ttl--)) {
+      this.$clearPhase()
       throw '10 digest iterations reached'
     }
   } while (dirty || this.$$asyncQueue.length)
+  this.$clearPhase()
 }
 
 // 这里借助lodash工具函数实现值的比较
@@ -105,18 +110,39 @@ Scope.prototype.$eval = function (expr, locals) {
 Scope.prototype.$apply = function (func) {
   // 在 `finally` 代码块中调用 `$digest`，这样才能保证即使执行函数时发生了异常，依然会启动 digest 周期。
   try {
+    this.$beginPhase('$apply');
     this.$eval(func);
   } finally {
+    this.$clearPhase();
     this.$digest();
   }
 }
 
 Scope.prototype.$evalAsync = function (expr) {
+  var self = this;
+  if (!self.$$phase && !self.$$asyncQueue.length) {
+    setTimeout(function () {
+      if (self.$$asyncQueue.length) {
+        self.$digest();
+      }
+    }, 0)
+  }
   // 这里把当前作用域也保存到任务队列是有原因的
   this.$$asyncQueue.push({
     scope: this,
     expression: expr
   })
+}
+
+Scope.prototype.$beginPhase = function (phase) {
+  if (this.$$phase) {
+    throw this.$$phase + 'already in progress'
+  }
+  this.$$phase = phase;
+}
+
+Scope.prototype.$clearPhase = function () {
+  this.$$phase = null;
 }
 
 module.exports = Scope;

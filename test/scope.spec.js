@@ -531,4 +531,52 @@ describe("$evalAsync", function () {
 
     expect(function () {scope.$digest();}).toThrow();
   });
+
+  it("has a $$phase field whose value is the current digest phase", function () {
+    scope.aValue = [1, 2, 3];
+    scope.phaseInWatchFunction = null;
+    scope.phaseInListenerFunction = null;
+    scope.phaseInAllpyFunction = null;
+
+    scope.$watch(
+      function (scope) {
+        scope.phaseInWatchFunction = scope.$$phase;
+        return scope.aValue;
+      },
+      function (newValue, oldValue, scope) {
+        scope.phaseInListenerFunction = scope.$$phase;
+      }
+    );
+
+    scope.$apply(function (scope) {
+      scope.phaseInAllpyFunction = scope.$$phase;
+    });
+
+    expect(scope.phaseInWatchFunction).toBe('$digest');
+    expect(scope.phaseInListenerFunction).toBe('$digest');
+    expect(scope.phaseInAllpyFunction).toBe('$apply');
+  });
+
+  it("schedules a digest in $evalAsync", function (done) {
+    scope.aValue = 'abc';
+    scope.counter = 0;
+
+    scope.$watch(
+      function (scope) { return scope.aValue;},
+      function (newValue, oldValue, scope) {
+        scope.counter++;
+      }
+    );
+
+    scope.$evalAsync(function(scope){});
+
+    // 要在 Jasmine 中使用 `setTimeout`，我们就要用到它对异步测试的支持：
+    // 测试用例对应的函数可以传入一个名为 `done` 的回调函数参数，
+    // 只有调用回调函数才会真正结束这个单元测试进程。我们会在 timeout 函数的最后调用这个回调函数。
+    expect(scope.counter).toBe(0);
+    setTimeout(function () {
+      expect(scope.counter).toBe(1);
+      done();
+    }, 50)
+  });
 });
