@@ -4,6 +4,8 @@ function Scope () {
   this.$$watchers = [];
   this.$$lastDirtyWatch = null;
   this.$$asyncQueue = [];
+  this.$$applyAsyncQueue = [];
+  this.$$applyAsyncId = null;
   this.$$phase = null;
 }
 
@@ -70,6 +72,12 @@ Scope.prototype.$digest = function () {
   // 只要 digest 启动，就把这个实例属性$$lastDirtyWatc重置为null
   this.$$lastDirtyWatch = null;
   this.$beginPhase('$digest');
+
+  // 判断如果当前已经有定时器处于待触发状态，就取消这个定时器并立即开始遍历异步任务队列
+  if (this.$$applyAsyncId) {
+    clearTimeout(this.$$applyAsyncId);
+    this.$$flushApplyAsync()
+  }
   do {
     while(this.$$asyncQueue.length) {
       var asyncTask = this.$$asyncQueue.shift();
@@ -116,6 +124,31 @@ Scope.prototype.$apply = function (func) {
     this.$clearPhase();
     this.$digest();
   }
+}
+
+// `$applyAsync` 的核心要点是对一小段时间内多次进行的操作进行优化，
+// 这样运行一次 digest 就能对这些操作带来的变化进行统一处理。
+Scope.prototype.$applyAsync = function (func) {
+  var self = this;
+  // 将applyAsync单独维护到一个队列中
+  self.$$applyAsyncQueue.push(function () {
+    self.$eval(func);
+  });
+  // 我们不需要分别对队列中的每一个元素调用一次 `$apply`。
+  // 我们只需要在循环以外调用一次 `$apply` 就可以了，我们只希望程序启动一次 digest。
+  if (self.$$applyAsyncId === null) { // 先判断一下这个$$applyAsyncId是否为空
+    self.$$applyAsyncId = setTimeout(function () {
+      self.$apply(_.bind(self.$$flushApplyAsync, self));
+    }, 0);
+  }
+}
+
+// 把 `$applyAsync` 中用于遍历执行异步任务队列的代码抽取成一个内部函数
+Scope.prototype.$$flushApplyAsync = function () {
+  while(this.$$applyAsyncQueue.length) {
+    this.$$applyAsyncQueue.shift()()
+  }
+  this.$$applyAsyncId = null;
 }
 
 Scope.prototype.$evalAsync = function (expr) {

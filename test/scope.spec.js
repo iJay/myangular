@@ -580,3 +580,96 @@ describe("$evalAsync", function () {
     }, 50)
   });
 });
+
+describe("$applyAsync", function () {
+  var scope;
+
+  beforeEach(function () {
+    scope = new Scope();
+  });
+
+  it("allows async $apply with $applyAsync", function (done) {
+    scope.counter = 0;
+    scope.aValue = undefined
+
+    scope.$watch(
+      function () { return scope.aValue;},
+      function (newValue, oldValue, scope) {
+        scope.counter++;
+      },
+    );
+
+    scope.$digest();
+    expect(scope.counter).toBe(1);
+
+    scope.$applyAsync(function (scope) {
+      scope.aValue = 'abc';
+    })
+
+    expect(scope.counter).toBe(1);
+
+    setTimeout(function () {
+      expect(scope.counter).toBe(2);
+      done();
+    }, 50);
+  });
+
+  it("coalesces many calls to $applyAsync", function (done) {
+    scope.counter = 0;
+    scope.aValue = null;
+
+    scope.$watch(
+      function (scope) {
+        scope.counter++;
+        return scope.aValue;
+      },
+      function (newValue, oldValue, scope) {}
+    );
+
+    scope.$applyAsync(function(scope) {
+      scope.aValue = 'abc';
+    });
+
+    scope.$applyAsync(function(scope) {
+      scope.aValue = 'def';
+    });
+
+    setTimeout(function () {
+      expect(scope.counter).toBe(2);
+      expect(scope.aValue).toEqual('def');
+      done();
+    }, 50)
+  });
+
+  // applyAsync` 的另一个特性是，如果在它设定的 timeout 定时器触发之前由于其他某些原因已经启动了一个 digest，
+  // 那定时器中的 digest 就无需启动了。
+  it("cancels ans flushed $applyAsync if digested first", function (done) {
+    scope.counter = 0;
+    scope.aValue = null;
+
+    scope.$watch(
+      function (scope) {
+        scope.counter++;
+        return scope.aValue;
+      },
+      function(newValue, oldValue, scope) {}
+    );
+
+    scope.$applyAsync(function(scope) {
+      scope.aValue = 'abc';
+    });
+
+    scope.$applyAsync(function(scope) {
+      scope.aValue = 'def';
+    });
+
+    scope.$digest();
+    expect(scope.counter).toBe(2);
+    expect(scope.aValue).toEqual('def');
+
+    setTimeout(function () {
+      expect(scope.counter).toBe(2);
+      done();
+    }, 50);
+  });
+});
