@@ -1015,5 +1015,34 @@ describe('Scope', function () {
       expect(aa.anotherValue).toBeUndefined();
       expect(aaa.anotherValue).toBeUndefined();
     });
+
+    // 属性屏蔽 从子作用域的角度而言 父作用域中属性被子作用域的同名属性所屏蔽
+    it("shadows a parents property with the same name", function () {
+      var parentScope = new Scope();
+      var childScope = parentScope.$new();
+
+      parentScope.name = 'Joe';
+      childScope.name = 'Jill';
+
+      expect(childScope.name).toBe('Jill');
+      expect(parentScope.name).toBe('Joe');
+    });
+
+    // 解决方法 将属性封装到一个对象中 
+    // 这种模式在AnglarJs被称为_“点运算规则”_（Dot Rule）,
+    // 指的是在表达式中对作用域上的属性进行操作时使用的点运算符。
+    // 为什么这里没有修改父作用域的user对象属性呢？？？
+    it("does not shadow members of parent scopes attibutes", function () {
+      var parentScope = new Scope();
+      var childScope = parentScope.$new();
+
+      parentScope.user = {
+        name: 'Joe'
+      };
+
+      childScope.user.name = 'Jill';
+      expect(childScope.user.name).toBe('Jill');
+      expect(parentScope.user.name).toBe('Jill');
+    });
   });
 });
