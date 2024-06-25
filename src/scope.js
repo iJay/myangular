@@ -261,4 +261,10 @@ Scope.prototype.$$postDigest = function (func) {
   this.$$postDigestQueue.push(func);
 }
 
+Scope.prototype.$new = function () {
+  var childScope = function () {}
+  childScope.prototype = this
+  return new childScope();
+}
+
 module.exports = Scope;
