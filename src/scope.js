@@ -299,24 +299,26 @@ Scope.prototype.$$postDigest = function (func) {
   this.$$postDigestQueue.push(func);
 }
 
-Scope.prototype.$new = function (isIsolated) {
+Scope.prototype.$new = function (isIsolated, parent) {
   var childScope;
   /**
    * 隔离作用域一般不会完全与自己的父作用域割裂开来的。
    * 相反，我们会根据需要从父作用域中获取的数据，明确定义出一个属性映射。
    */
+  parent = parent || this
   if (!isIsolated) {
     var childScopeCtor = function () {};
     childScopeCtor.prototype = this;
     childScope = new childScopeCtor();
   } else {
     childScope = new Scope();
-    childScope.$$asyncQueue = this.$$asyncQueue;
-    childScope.$$postDigestQueue = this.$$postDigestQueue;
-    childScope.$root = this.$root;
-    childScope.$$applyAsyncQueue = this.$$applyAsyncQueue;
+    // 无论是用 `this` 还是用 `parent` 访问都可以，但为了清晰起见，我们还是统一使用后者访问
+    childScope.$$asyncQueue = parent.$$asyncQueue;
+    childScope.$$postDigestQueue = parent.$$postDigestQueue;
+    childScope.$root = parent.$root;
+    childScope.$$applyAsyncQueue = parent.$$applyAsyncQueue;
   }
-  this.$$children.push(childScope);
+  parent.$$children.push(childScope);
   // 为了保证digest只遍历当前scope的$$watchers 
   // 需要为每个作用域都初始化一个$$watchers数组
   // 这里实际借助了js原型链的属性屏蔽特性
