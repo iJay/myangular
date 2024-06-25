@@ -2,6 +2,7 @@ var _ = require('lodash')
 function Scope () {
   // 前缀——$$表示这个变量仅用于 Angular 框架内部，不允许在应用代码中进行访问。
   this.$$watchers = [];
+  // `$$lastDirtyWatch` 指向的应该都是根作用域上的 `$$lastDirtyWatch`。
   this.$$lastDirtyWatch = null;
   this.$$asyncQueue = [];
   this.$$applyAsyncQueue = [];
@@ -15,6 +16,7 @@ function Scope () {
    * 它能实现与 `$$children` 数组同样的效果。
    */
   this.$$children = [];
+  this.$root = this;
   this.$$phase = null;
 }
 
@@ -40,7 +42,7 @@ Scope.prototype.$watch = function (watchFn, listenerFn, valueEq) {
       self.$$watchers.splice(index, 1);
     }
     // 在移除 watcher 的同时取消短路优化
-    self.$$lastDirtyWatch = null;
+    self.$root.$$lastDirtyWatch = null;
   }
 }
 
@@ -126,13 +128,13 @@ Scope.prototype.$digestOnce = function () {
           newValue = watcher.watchFn(scope);
           oldValue = watcher.last;
           if (!scope.$$areEqual(newValue, oldValue, watcher.valueEq)) {
-            self.$$lastDirtyWatch = watcher
+            scope.$root.$$lastDirtyWatch = watcher
             watcher.last = (watcher.valueEq ? _.cloneDeep(newValue) : newValue);
             watcher.listenerFn(newValue, (oldValue === initWatchValue ? newValue : oldValue), self);
             dirty = true;
           // `$$lastDirtyWatch` 属性总是指向最顶层的那个作用域。
           // 短路优化需要考虑作用域所在树结构范围内的所有 watcher。
-          } else if (self.$$lastDirtyWatch === watcher) {
+          } else if (scope.$root.$$lastDirtyWatch === watcher) {
             continueLoop = false;
             // 在 lodash的 _.forEach 循环中显式地返回 false 会让循环提前结束
             return false;
@@ -163,7 +165,7 @@ Scope.prototype.$digest = function () {
   var ttl = 10;
   var dirty;
   // 只要 digest 启动，就把这个实例属性$$lastDirtyWatc重置为null
-  this.$$lastDirtyWatch = null;
+  this.$root.$$lastDirtyWatch = null;
   this.$beginPhase('$digest');
 
   // 判断如果当前已经有定时器处于待触发状态，就取消这个定时器并立即开始遍历异步任务队列
@@ -224,7 +226,7 @@ Scope.prototype.$evalAsync = function (expr) {
   if (!self.$$phase && !self.$$asyncQueue.length) {
     setTimeout(function () {
       if (self.$$asyncQueue.length) {
-        self.$digest();
+        self.$root.$digest();
       }
     }, 0)
   }
@@ -235,14 +237,21 @@ Scope.prototype.$evalAsync = function (expr) {
   })
 }
 
+/**
+ * 推荐使用 $apply 而不是$digest
+ * 因为我们不清楚哪些作用域与即将发生的变更有关，
+ * 那可以对所有作用域进行脏值检测
+ */
 Scope.prototype.$apply = function (func) {
   // 在 `finally` 代码块中调用 `$digest`，这样才能保证即使执行函数时发生了异常，依然会启动 digest 周期。
   try {
+    // 这里的 `$eval` 方法依旧是在当前作用域上下文内执行的，而不是根作用域。
+    // 我们只是希望 digest 能从根作用域一路运行下来而已。
     this.$beginPhase('$apply');
-    this.$eval(func);
+    return this.$eval(func);
   } finally {
     this.$clearPhase();
-    this.$digest();
+    this.$root.$digest();
   }
 }
 
