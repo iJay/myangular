@@ -1276,5 +1276,50 @@ describe('Scope', function () {
       hierarchyParent.$digest();
       expect(child.counter).toBe(2);
     });
+
+    it("is no longer digested when $destroy has been called", function () {
+      var parent = new Scope();
+      var child = parent.$new();
+      var child1 = parent.$new();
+
+      child.aValue = [1, 2, 3];
+      child1.aValue = [6, 7, 8]
+      child.counter = 0;
+      child1.counter = 0;
+      child.$watch(
+        function (scope) { return scope.aValue; },
+        function (newValue, oldValue, scope) {
+          scope.counter++;
+        },
+        true
+      );
+
+      child1.$watch(
+        function (scope) { return scope.aValue; },
+        function (newValue, oldValue, scope) {
+          scope.counter++;
+        },
+        true
+      );
+
+      parent.$digest();
+      expect(child.counter).toBe(1);
+      expect(child1.counter).toBe(1);
+
+      child.aValue.push(4);
+      child1.aValue.push(9);
+      parent.$digest();
+      expect(child.counter).toBe(2);
+      expect(child1.counter).toBe(2);
+
+      child.$destroy();
+      child.aValue.push(5);
+      child1.aValue.push(10);
+      parent.$digest();
+      expect(child.counter).toBe(2);
+      // 加上这个是因为父作用域有多个子作用域存在 不能直接全部清空
+      // eg: this.$parent.$$children = []
+      expect(child1.counter).toBe(3);
+    });
   });
 });

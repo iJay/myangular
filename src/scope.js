@@ -324,7 +324,19 @@ Scope.prototype.$new = function (isIsolated, parent) {
   // 这里实际借助了js原型链的属性屏蔽特性
   childScope.$$watchers = [];
   childScope.$$children = [];
+  childScope.$parent = parent;
   return childScope;
+}
+
+Scope.prototype.$destroy = function () {
+  if (this.$parent) {
+    var siblings = this.$parent.$$children;
+    var indexOfThis = siblings.indexOf(this);
+    if (indexOfThis >= 0) {
+      siblings.splice(indexOfThis, 1);
+    }
+  }
+  this.$$watchers = []
 }
 
 module.exports = Scope;
