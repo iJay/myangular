@@ -114,7 +114,6 @@ Scope.prototype.$watchGroup = function (watchFns, listenerFn) {
 Scope.prototype.$digestOnce = function () {
   var dirty;
   var continueLoop = true;
-  var self = this;
   this.$$everyScope(function (scope) {
     var newValue, oldValue;
     // 从后往前遍历 防止watchFn中删除当前watcher 导致跳过未遍历的watcher
@@ -130,7 +129,7 @@ Scope.prototype.$digestOnce = function () {
           if (!scope.$$areEqual(newValue, oldValue, watcher.valueEq)) {
             scope.$root.$$lastDirtyWatch = watcher
             watcher.last = (watcher.valueEq ? _.cloneDeep(newValue) : newValue);
-            watcher.listenerFn(newValue, (oldValue === initWatchValue ? newValue : oldValue), self);
+            watcher.listenerFn(newValue, (oldValue === initWatchValue ? newValue : oldValue), scope);
             dirty = true;
           // `$$lastDirtyWatch` 属性总是指向最顶层的那个作用域。
           // 短路优化需要考虑作用域所在树结构范围内的所有 watcher。
@@ -169,8 +168,8 @@ Scope.prototype.$digest = function () {
   this.$beginPhase('$digest');
 
   // 判断如果当前已经有定时器处于待触发状态，就取消这个定时器并立即开始遍历异步任务队列
-  if (this.$$applyAsyncId) {
-    clearTimeout(this.$$applyAsyncId);
+  if (this.$root.$$applyAsyncId) {
+    clearTimeout(this.$root.$$applyAsyncId);
     this.$$flushApplyAsync()
   }
   do {
@@ -257,6 +256,7 @@ Scope.prototype.$apply = function (func) {
 
 // `$applyAsync` 的核心要点是对一小段时间内多次进行的操作进行优化，
 // 这样运行一次 digest 就能对这些操作带来的变化进行统一处理。
+// 合并 `$apply` 调用
 Scope.prototype.$applyAsync = function (func) {
   var self = this;
   // 将applyAsync单独维护到一个队列中
@@ -265,8 +265,8 @@ Scope.prototype.$applyAsync = function (func) {
   });
   // 我们不需要分别对队列中的每一个元素调用一次 `$apply`。
   // 我们只需要在循环以外调用一次 `$apply` 就可以了，我们只希望程序启动一次 digest。
-  if (self.$$applyAsyncId === null) { // 先判断一下这个$$applyAsyncId是否为空
-    self.$$applyAsyncId = setTimeout(function () {
+  if (self.$root.$$applyAsyncId === null) { // 先判断一下这个$$applyAsyncId是否为空
+    self.$root.$$applyAsyncId = setTimeout(function () {
       self.$apply(_.bind(self.$$flushApplyAsync, self));
     }, 0);
   }
@@ -281,7 +281,7 @@ Scope.prototype.$$flushApplyAsync = function () {
       console.error(error);
     }
   }
-  this.$$applyAsyncId = null;
+  this.$root.$$applyAsyncId = null;
 }
 
 Scope.prototype.$beginPhase = function (phase) {
@@ -299,10 +299,23 @@ Scope.prototype.$$postDigest = function (func) {
   this.$$postDigestQueue.push(func);
 }
 
-Scope.prototype.$new = function () {
-  var childScopeCtor = function () {};
-  childScopeCtor.prototype = this;
-  var childScope = new childScopeCtor();
+Scope.prototype.$new = function (isIsolated) {
+  var childScope;
+  /**
+   * 隔离作用域一般不会完全与自己的父作用域割裂开来的。
+   * 相反，我们会根据需要从父作用域中获取的数据，明确定义出一个属性映射。
+   */
+  if (!isIsolated) {
+    var childScopeCtor = function () {};
+    childScopeCtor.prototype = this;
+    childScope = new childScopeCtor();
+  } else {
+    childScope = new Scope();
+    childScope.$$asyncQueue = this.$$asyncQueue;
+    childScope.$$postDigestQueue = this.$$postDigestQueue;
+    childScope.$root = this.$root;
+    childScope.$$applyAsyncQueue = this.$$applyAsyncQueue;
+  }
   this.$$children.push(childScope);
   // 为了保证digest只遍历当前scope的$$watchers 
   // 需要为每个作用域都初始化一个$$watchers数组
