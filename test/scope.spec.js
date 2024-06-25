@@ -937,6 +937,8 @@ describe('Scope', function () {
   });
 
   // 作用域的创建要么是由控制器创建，要么是由指令创建
+  // 子作用域创建是通过$new方法创建的
+  // 通过new Scope创建的是根作用域
   describe("inheritance", function () {
     it("inherits the parent's properties", function () {
       var parentScope = new Scope();
