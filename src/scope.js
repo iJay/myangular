@@ -262,9 +262,14 @@ Scope.prototype.$$postDigest = function (func) {
 }
 
 Scope.prototype.$new = function () {
-  var childScope = function () {}
-  childScope.prototype = this
-  return new childScope();
+  var childScopeCtor = function () {};
+  childScopeCtor.prototype = this;
+  var childScope = new childScopeCtor();
+  // 为了保证digest只遍历当前scope的$$watchers 
+  // 需要为每个作用域都初始化一个$$watchers数组
+  // 这里实际借助了js原型链的属性屏蔽特性
+  childScope.$$watchers = [];
+  return childScope;
 }
 
 module.exports = Scope;

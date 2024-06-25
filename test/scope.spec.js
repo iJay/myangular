@@ -1044,5 +1044,21 @@ describe('Scope', function () {
       expect(childScope.user.name).toBe('Jill');
       expect(parentScope.user.name).toBe('Jill');
     });
+
+    it("does not digest its parents", function () {
+      var parentScope = new Scope();
+      var childScope = parentScope.$new();
+
+      parentScope.aValue = 'abc';
+      parentScope.$watch(
+        function (scope) {return scope.aValue;},
+        function(newValue, oldValue, scope) {
+          scope.aValuewas = newValue;
+        }
+      );
+
+      childScope.$digest();
+      expect(childScope.aValuewas).toBeUndefined();
+    });
   });
 });
