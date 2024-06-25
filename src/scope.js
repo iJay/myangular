@@ -7,6 +7,14 @@ function Scope () {
   this.$$applyAsyncQueue = [];
   this.$$applyAsyncId = null;
   this.$$postDigestQueue = [];
+  /**
+   * 实际上，AngularJS 的作用域上并没有 `$$children` 属性。
+   * 如果查看源码，你能发现它把子作用域放到一组定制的、链表形式的变量中：
+   * `$$nextSibling`，`$$prevSibling`，`$$childHead` 和 `$$childTail`。
+   * 这样处理后，新增和移除作用域时的开销要比使用常规数组操作成本更低。
+   * 它能实现与 `$$children` 数组同样的效果。
+   */
+  this.$$children = [];
   this.$$phase = null;
 }
 
@@ -102,30 +110,51 @@ Scope.prototype.$watchGroup = function (watchFns, listenerFn) {
 
 // 这个函数能把所有 watcher 都执行一次，最终返回一个标识本轮是否发生了变化的布尔值
 Scope.prototype.$digestOnce = function () {
+  var dirty;
+  var continueLoop = true;
   var self = this;
-  var newValue, oldValue, dirty;
-  // 从后往前遍历 防止watchFn中删除当前watcher 导致跳过未遍历的watcher
-  // 这里如果是从前往后遍历，删除其中一个watcher 数组自动进行shift操作，后面的watcher会替代被删除watcher的位置
-  _.forEachRight(this.$$watchers, function(watcher) {
-    try { // 在Angular中 它实际上会把异常处理交由一个叫 $exceptionHandler 的服务来处理
-      if (watcher) {
-        newValue = watcher.watchFn(self);
-        oldValue = watcher.last;
-        if (!self.$$areEqual(newValue, oldValue, watcher.valueEq)) {
-          self.$$lastDirtyWatch = watcher
-          watcher.last = (watcher.valueEq ? _.cloneDeep(newValue) : newValue);
-          watcher.listenerFn(newValue, (oldValue === initWatchValue ? newValue : oldValue), self);
-          dirty = true;
-        } else if (self.$$lastDirtyWatch === watcher) {
-          // 在 lodash的 _.forEach 循环中显式地返回 false 会让循环提前结束
-          return false;
+  this.$$everyScope(function (scope) {
+    var newValue, oldValue;
+    // 从后往前遍历 防止watchFn中删除当前watcher 导致跳过未遍历的watcher
+    // 这里如果是从前往后遍历，删除其中一个watcher 数组自动进行shift操作，后面的watcher会替代被删除watcher的位置
+    _.forEachRight(scope.$$watchers, function(watcher) {
+      try { // 在Angular中 它实际上会把异常处理交由一个叫 $exceptionHandler 的服务来处理
+        if (watcher) {
+          // 在内层循环中，我们把 `this` 换成当前 `scope`。
+          // watch 函数传入的必须是它所挂载的 scope 上，
+          // 而不是调用 `$digest` 方法的那个 scope 对象
+          newValue = watcher.watchFn(scope);
+          oldValue = watcher.last;
+          if (!scope.$$areEqual(newValue, oldValue, watcher.valueEq)) {
+            self.$$lastDirtyWatch = watcher
+            watcher.last = (watcher.valueEq ? _.cloneDeep(newValue) : newValue);
+            watcher.listenerFn(newValue, (oldValue === initWatchValue ? newValue : oldValue), self);
+            dirty = true;
+          // `$$lastDirtyWatch` 属性总是指向最顶层的那个作用域。
+          // 短路优化需要考虑作用域所在树结构范围内的所有 watcher。
+          } else if (self.$$lastDirtyWatch === watcher) {
+            continueLoop = false;
+            // 在 lodash的 _.forEach 循环中显式地返回 false 会让循环提前结束
+            return false;
+          }
         }
+      } catch (e) {
+        console.error(e);
       }
-    } catch (e) {
-      console.error(e);
-    }
+    });
+    return continueLoop;
   });
   return dirty;
+}
+
+Scope.prototype.$$everyScope = function (fn) {
+  if (fn(this)) {
+    return this.$$children.every(function (child) {
+      return child.$$everyScope(fn);
+    });
+  } else {
+    return false;
+  }
 }
 
 // $digest 至少会对所有 watcher 进行一轮遍历
@@ -265,10 +294,12 @@ Scope.prototype.$new = function () {
   var childScopeCtor = function () {};
   childScopeCtor.prototype = this;
   var childScope = new childScopeCtor();
+  this.$$children.push(childScope);
   // 为了保证digest只遍历当前scope的$$watchers 
   // 需要为每个作用域都初始化一个$$watchers数组
   // 这里实际借助了js原型链的属性屏蔽特性
   childScope.$$watchers = [];
+  childScope.$$children = [];
   return childScope;
 }
 

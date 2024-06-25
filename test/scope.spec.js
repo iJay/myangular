@@ -1060,5 +1060,38 @@ describe('Scope', function () {
       childScope.$digest();
       expect(childScope.aValuewas).toBeUndefined();
     });
+
+    it("keeps a record of its children", function () {
+      var parent = new Scope();
+      var child1 = parent.$new();
+      var child2 = parent.$new();
+      var child2_1 = child2.$new();
+
+      expect(parent.$$children.length).toBe(2);
+      expect(parent.$$children[0]).toBe(child1);
+      expect(parent.$$children[1]).toBe(child2);
+
+      expect(child1.$$children.length).toBe(0);
+
+      expect(child2.$$children.length).toBe(1);
+      expect(child2.$$children[0]).toBe(child2_1);
+    });
+
+    // 为了保证通过这个测试用例 我们需要遍历当前作用域及其子作用域下整个树结构的所有$$watchers
+    it("digests its children", function () {
+      var parent = new Scope();
+      var child = parent.$new();
+
+      parent.aValue = 'abc';
+      child.$watch(
+        function (scope) { return scope.aValue;},
+        function (newValue, oldValue, scope) {
+          scope.aValuewas = newValue;
+        }
+      );
+
+      parent.$digest();
+      expect(child.aValuewas).toBe('abc');
+    });
   });
 });
