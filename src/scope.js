@@ -339,4 +339,29 @@ Scope.prototype.$destroy = function () {
   this.$$watchers = []
 }
 
+Scope.prototype.$watchCollection= function (watchFn, listenerFn) {
+  var self = this;
+  var newValue, oldValue;
+  var changeCount = 0;
+  // internalWatchFn无返回值 也就不会调用 listener 函数
+  // 只要检测到对象中有一个元素发生变化，就让计数器递增
+  // 每个通过`$watchCollection` 注册的 watcher 都有自己的计数器，
+  // 它会在 watcher 的整个生命周期中不断递增,
+  // `internalWatchFn` 中返回这个计数器，就能满足 watch 的函数约束
+  var internalWatchFn = function (scope) {
+    newValue = watchFn(scope);
+    // check for change
+    // 非集合数据来说，看新旧值是否发生了引用层面的变化
+    if (!scope.$$areEqual(newValue, oldValue, false)) {
+      changeCount++;
+    }
+    oldValue = newValue;
+    return changeCount;
+  };
+  var internalListenerFn = function () {
+    listenerFn(newValue, oldValue, self);
+  };
+  return this.$watch(internalWatchFn, internalListenerFn);
+}
+
 module.exports = Scope;
