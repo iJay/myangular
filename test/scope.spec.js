@@ -1375,4 +1375,4 @@ describe('Scope', function () {
       expect(scope.counter).toBe(1);
     });
   });
-;});
+});
